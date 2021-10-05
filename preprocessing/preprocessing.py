@@ -39,7 +39,8 @@ def createNews(news,newsTimes,entityEmbedding):
     /generate/news_cleaned.csv
     '''
     df_news = pd.read_csv(news,sep='\t',header=None)
-    df_news.rename(columns={0:'NID',1:'category',2:'subcat',3:'title',4:'abstract',5:'url',6:'titleEntities',7:'abstractEntities'},inplace=True)
+    df_news.rename(columns={0:'NID',1:'category',2:'subcat',3:'title'
+                            ,4:'abstract',5:'url',6:'titleEntities',7:'abstractEntities'},inplace=True)
     
     df_news['newsHash'] = df_news.url.apply(url2Hash)
     
@@ -61,7 +62,31 @@ def createNews(news,newsTimes,entityEmbedding):
     df_news = df_news.merge(df_newstimes,on='newsHash')
     df_news.to_csv(output+'news_cleaned.csv',index=None)
     
+def subcat2vector(subcat,nlp):
+    tokens = [t for t in nlp(subcat) if t.has_vector]
+    vec = np.zeros((300,1))
+    if len(tokens)==0:
+        return vec
+    
+    for token in tokens:
+        vec+=token.vector.reshape(-1,1)
+    
+    vec = vec.mean(axis=1)
+    return vec
 
+def createCategoriyEmbeddingNLP(subcategories):
+    '''subcategories: path to the cleaned subcategory list, it should under generate/ directory'''
+    import spacy
+    
+    nlp = spacy.load("en_core_web_lg")
+    
+    vecSize = 300
+    
+    df_subcategories = pd.read_csv(subcategories,sep=';')
+    embeddings = df_subcategories.subcat_tokens.apply(lambda x:subcat2vector(x,nlp))
+    df_subcat_embeddings = pd.DataFrame.from_records(embeddings,columns=['V'+str(i) for i in range(1,vecSize+1)])
+    pd.concat([df_subcategories,df_subcat_embeddings],axis=1).to_csv(output+'news_subcat_embedding_nlp.csv')
+    
 def createUsers(behaviors):
     df_behavior = pd.read_csv(behaviors,sep='\t',header=None)
     
