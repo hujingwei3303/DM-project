@@ -117,4 +117,27 @@ def createUsers(behaviors):
     user_impressions_fp.close()
     user_history_fp.close()
     
-    
+def splitFiles(file_path, file_numbers = 36):
+    index_suffix = file_path.index('.')
+    filenames = [file_path[:index_suffix]+'_'+str(i) + file_path[index_suffix:] for i in range(file_numbers)]
+    fps = [open(fi,'w') for fi in filenames]
+
+    j = 0
+    header = None
+    with open(file_path,mode='r') as f:
+        for line in f:
+            if j == 0:
+                header = line
+                j+=1
+                continue
+            elif j == 1:
+                for fp in fps:
+                    fp.write(header)
+
+            UID = line.split(',')[0]
+            i = hash(UID)%file_numbers
+            fps[i].write(line)
+            j+=1
+
+    for fp in fps:
+        fp.close()    
