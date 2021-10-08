@@ -46,7 +46,7 @@ def createNews(news,newsTimes,entityEmbedding):
     
     #create embedding dataframe
     df_entityEmbedding = getEntityEmbedding(entityEmbedding)
-    print(df_entityEmbedding.shape)
+    
     vectorColumns = [c for c in df_entityEmbedding.columns if not c=='WikidataId']
     emb = df_news.apply(lambda r:entity2Embedding(df_entityEmbedding,vectorColumns,r),axis=1)  
  
@@ -88,6 +88,8 @@ def createCategoriyEmbeddingNLP(subcategories):
     pd.concat([df_subcategories,df_subcat_embeddings],axis=1).to_csv(output+'news_subcat_embedding_nlp.csv')
     
 def createUsers(behaviors):
+    duplicated_values = set()
+    
     df_behavior = pd.read_csv(behaviors,sep='\t',header=None)
     
     user_impressions_fp = open(output+'user_impressions.csv', 'w',encoding='utf-8')
@@ -106,15 +108,19 @@ def createUsers(behaviors):
         history = row[3]
         if type(history)==str and len(history)>0:
             for h in history.strip().split(' '):
-                user_history_writer.writerow([user,h])
+                key = user+h
+                if key not in duplicated_values:
+                    user_history_writer.writerow([user,h])
+                    duplicated_values.add(key)
         
         impressions = row[4]
         if type(impressions)==str and len(impressions)>0: 
             for imp in impressions.strip().split(' '):
                 i = imp.split('-')
                 user_impressions_writer.writerow([user,ts,i[0],i[1]])
+         
                 
-    user_impressions_fp.close()
+    user_impressions_fp.close() 
     user_history_fp.close()
     
 def splitFiles(file_path, file_numbers = 36):
@@ -135,9 +141,13 @@ def splitFiles(file_path, file_numbers = 36):
                     fp.write(header)
 
             UID = line.split(',')[0]
-            i = hash(UID)%file_numbers
+            
+            i = int(UID[1:])%file_numbers
             fps[i].write(line)
             j+=1
 
     for fp in fps:
-        fp.close()    
+        fp.close()
+        
+    for fn in filenames:
+        pd.read_csv(fn).drop_duplicates(['UID','NID']).to_csv(fn,index=None)
