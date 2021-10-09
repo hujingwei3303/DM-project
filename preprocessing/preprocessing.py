@@ -134,7 +134,7 @@ def splitFiles(file_path, file_numbers = 36):
 
     j = 0
     header = None
-    with open(file_path,mode='r') as f:
+    with open(file_path,mode='r',encoding='utf-8') as f:
         for line in f:
             if j == 0:
                 header = line
