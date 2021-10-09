@@ -90,7 +90,7 @@ def createCategoriyEmbeddingNLP(subcategories):
 def createUsers(behaviors):
     duplicated_values = set()
     
-    df_behavior = pd.read_csv(behaviors,sep='\t',header=None)
+    behavior_fp = open(behaviors,'r',encoding='utf-8')
     
     user_impressions_fp = open(output+'user_impressions.csv', 'w',encoding='utf-8')
     user_impressions_writer = csv.writer(user_impressions_fp)
@@ -100,9 +100,11 @@ def createUsers(behaviors):
     user_history_writer = csv.writer(user_history_fp)
     user_history_writer.writerow(['UID','NID'])
     
-    for _,row in df_behavior.iterrows():
-        user = row[1]
-        ts = time2stamp(row[2])
+    for line in behavior_fp:
+        row = line.split('\t')
+        
+        user = row[1].strip()
+        ts = time2stamp(row[2].strip())
         
 
         history = row[3]
@@ -122,11 +124,13 @@ def createUsers(behaviors):
                 
     user_impressions_fp.close() 
     user_history_fp.close()
+    behavior_fp.close()
+    duplicated_values = set()
     
 def splitFiles(file_path, file_numbers = 36):
     index_suffix = file_path.index('.')
     filenames = [file_path[:index_suffix]+'_'+str(i) + file_path[index_suffix:] for i in range(file_numbers)]
-    fps = [open(fi,'w') for fi in filenames]
+    fps = [open(fi,'w',encoding='utf-8') for fi in filenames]
 
     j = 0
     header = None
@@ -139,9 +143,15 @@ def splitFiles(file_path, file_numbers = 36):
             elif j == 1:
                 for fp in fps:
                     fp.write(header)
-
+            
+            
             UID = line.split(',')[0]
             
+            try:
+                uid = int(UID[1:])
+            except:
+                continue
+                
             i = int(UID[1:])%file_numbers
             fps[i].write(line)
             j+=1
