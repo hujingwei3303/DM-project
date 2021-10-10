@@ -90,13 +90,13 @@ def createCategoriyEmbeddingNLP(subcategories):
 def createUsers(behaviors):
     duplicated_values = set()
     
-    behavior_fp = open(behaviors,'r',encoding='utf-8')
+    behavior_fp = open(behaviors,'r',encoding='utf-8',newline='\n')
     
-    user_impressions_fp = open(output+'user_impressions.csv', 'w',encoding='utf-8')
+    user_impressions_fp = open(output+'user_impressions.csv', 'w',encoding='utf-8',newline='\n')
     user_impressions_writer = csv.writer(user_impressions_fp)
     user_impressions_writer.writerow(['UID','timestamp','NID','attitude'])
         
-    user_history_fp = open(output+'user_history.csv', 'w',encoding='utf-8')
+    user_history_fp = open(output+'user_history.csv', 'w',encoding='utf-8',newline='\n')
     user_history_writer = csv.writer(user_history_fp)
     user_history_writer.writerow(['UID','NID'])
     
@@ -130,11 +130,11 @@ def createUsers(behaviors):
 def splitFiles(file_path, file_numbers = 36):
     index_suffix = file_path.index('.')
     filenames = [file_path[:index_suffix]+'_'+str(i) + file_path[index_suffix:] for i in range(file_numbers)]
-    fps = [open(fi,'w',encoding='utf-8') for fi in filenames]
+    fps = [open(fi,'w',encoding='utf-8',newline='\n') for fi in filenames]
 
     j = 0
     header = None
-    with open(file_path,mode='r',encoding='utf-8') as f:
+    with open(file_path,mode='r',encoding='utf-8',newline='\n') as f:
         for line in f:
             if j == 0:
                 header = line
