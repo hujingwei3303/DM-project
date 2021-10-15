@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pickle
 import os.path
-from analysis.common import get_vector_columns
+from analysis.common import getVectorColumns
 
 def initSearchIndex(force_create=False):
     fname = 'generate/searchIndex.pkl'
@@ -17,7 +17,7 @@ def initSearchIndex(force_create=False):
         dim = 100
         num_elements = 89222 #number of news we have
         data = pd.read_csv("generate/news_embedding.csv")
-        vector_columns = get_vector_columns(data)
+        vector_columns = getVectorColumns(data)
         ids = data.NID.apply(lambda nid:int(nid[1:]))
         data = data[vector_columns]
 
@@ -35,7 +35,7 @@ def initSearchIndex(force_create=False):
 def searchKNearestNeighbors(user_representation,k=5):
     p = initSearchIndex()
     
-    vector_columns = get_vector_columns(user_representation)
+    vector_columns = getVectorColumns(user_representation)
     
     records = []
     for UID,g in user_representation.groupby('UID'):

@@ -3,9 +3,9 @@ from scipy.spatial.distance import pdist,cosine,squareform
 import numpy.ma as ma
 import pandas as pd
 import numpy as np
-from analysis.common import get_vector_columns
+from analysis.common import getVectorColumns,initialUserHistory
 
-def clustering(X,vector_columns,threshold,lam,radius_scale=1,default_radius=0.3,with_centroid=False):
+def clustering(X,vector_columns,threshold,lam,radius_scale=1,default_radius=0.3,constant_radius=0.0,with_centroid=False):
     ''' X 
             [dataframe] group of user history
         vector_columns 
@@ -16,6 +16,10 @@ def clustering(X,vector_columns,threshold,lam,radius_scale=1,default_radius=0.3,
             [number] paramter for importance sampling
        '''
     m,n = X.shape
+    
+    if constant_radius>0:
+        default_radius = constant_radius
+        
     #print(X)
     if m>1:
         pairwise_distance = pdist(X[vector_columns], metric='cosine')
@@ -57,26 +61,41 @@ def clustering(X,vector_columns,threshold,lam,radius_scale=1,default_radius=0.3,
             
             for j in idx:
                 mask[j,idx]=0
+                
             masked_pairwise = ma.array(pairwise, mask = mask)
             
             if with_centroid:
                 mean_vector = X.loc[X.index[idx]][vector_columns].mean().values
             
             if len_idx<3:
-                distance_upper_bound.append(default_radius)   
+                
+                distance_upper_bound.append(default_radius) 
+                
                 medoids.append(X.loc[X.index[idx[0]]][vector_columns].values)
                 if with_centroid:
                     centroids.append(mean_vector) 
                 continue
+                
             min_distance_i = masked_pairwise.sum(axis=1).argmin()
+            
             distances_i = masked_pairwise.compressed().reshape((len_idx,len_idx))[0]
+            
             distances_i = distances_i[~(distances_i==0)]
             
+           
             #68%-95%-99.8% for 1,2,3 std
             #!!!!!however
             #according to the result, larger cluster has lower std.
             
-            distance_upper_bound.append(distances_i.mean()+radius_scale*distances_i.std())   
+            if constant_radius==0.0:
+                if len(distances_i)==0:#all point in cluster have same entity embeddings
+                    radius = default_radius
+                else:
+                    radius = distances_i.mean()+radius_scale*distances_i.std()
+                distance_upper_bound.append(radius) 
+            else:
+                distance_upper_bound.append(default_radius)  
+                
             medoids.append(X.loc[X.index[min_distance_i]][vector_columns].values)
             
             if with_centroid:
@@ -93,29 +112,22 @@ def clustering(X,vector_columns,threshold,lam,radius_scale=1,default_radius=0.3,
             return X[vector_columns].values,default_radius*np.ones(X.shape[0])
 
 
-def clusteringBatch(history,t0,threshold=0.7,lam=0.01,radius_scale=1,default_radius=0.3, with_centroid=False):
-    df_news_embedding = pd.read_csv('generate/news_embedding.csv')
-    df_news_meta = pd.read_csv('generate/news_cleaned.csv')
-    
-    df_history = pd.read_csv(history)
-    
-    #df_history = df_history[df_history.UID=='U1']
- 
-    df_history = df_history.merge(df_news_embedding,on='NID')
-    df_history = df_history.merge(df_news_meta,on='NID')
-
-
+def clusteringBatch(t0,history='',df_history=None,threshold=0.7,lam=0.01,radius_scale=1,default_radius=0.3,constant_radius=0.0,with_centroid=False):
+    if df_history is None:
+        df_history = initialUserHistory(history)
+        
     df_history['importance'] = np.exp(-lam*(t0-df_history.publishDate)/100000)
 
-    vector_columns = get_vector_columns(df_history)
-
+    vector_columns = getVectorColumns(df_history)
+    
     if with_centroid:
         records_medoid = []
         records_centroid = []
         
         for UID,g in df_history.groupby('UID'):
+            
             medoid,centroid,radius = clustering(g,vector_columns,\
-                                                threshold,lam,radius_scale,default_radius,with_centroid)
+                                                threshold,lam,radius_scale,default_radius,constant_radius,with_centroid)
         
             len_centroid = len(centroid)
         
@@ -136,7 +148,7 @@ def clusteringBatch(history,t0,threshold=0.7,lam=0.01,radius_scale=1,default_rad
         df_medoid = pd.DataFrame.from_records(records_medoid,columns=['UID']+vector_columns+['radius'])
         return df_medoid,df_centroid
     else:
-        medoid,radius = clustering(g,vector_columns,threshold,lam,radius_scale,default_radius,with_centroid)
+        medoid,radius = clustering(g,vector_columns,threshold,lam,radius_scale,default_radius,constant_radius,with_centroid)
         
         len_medoid = len(medoid)
         

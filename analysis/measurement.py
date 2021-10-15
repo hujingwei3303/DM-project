@@ -1,7 +1,8 @@
 from scipy.spatial.distance import cosine,cdist,squareform
 import pandas as pd
 import numpy as np
-from analysis.common import get_vector_columns
+from analysis.common import getVectorColumns,initialUserImpression,initialUserHistory
+from analysis.clustering import clusteringBatch
 
 def baselineTest(history,default_radius=0.3):
     df_news_embedding = pd.read_csv('generate/news_embedding.csv')
@@ -14,7 +15,7 @@ def baselineTest(history,default_radius=0.3):
     #Sort by publishDate ascendingly
     df_history.sort_values('publishDate',inplace=True)
 
-    vector_columns = get_vector_columns(df_history)
+    vector_columns = getVectorColumns(df_history)
 
     records_random = []
     records_latest = []
@@ -51,16 +52,11 @@ def baselineTest(history,default_radius=0.3):
     return df_random,df_latest
 
 
-def measurement(impression,df_user_representation):
-    df_impression = pd.read_csv(impression)
-    df_impression = df_impression[df_impression.attitude==1]
+def measurement(df_user_representation,impression='',df_impression=None):
+    if df_impression is None:
+        df_impression = initialUserImpression(impression)
     
-    #df_impression = df_impression[df_impression.UID=='U1']
-    
-    df_news_embedding = pd.read_csv('generate/news_embedding.csv')
-    df_impression = df_impression.merge(df_news_embedding,on='NID')
-    
-    vector_columns = get_vector_columns(df_impression)
+    vector_columns = getVectorColumns(df_impression)
         
     measure = []
     for UID,g in df_impression.groupby('UID'):
@@ -89,3 +85,45 @@ def measurement(impression,df_user_representation):
         measure.append((UID,recall,hit))
         
     return pd.DataFrame.from_records(measure,columns=['UID','recall','percent_empty'])
+
+def tuning(df_history,df_impression,t0,threshold,lam):
+    res = []
+    print("Clustering...")
+    medoids,centroids = clusteringBatch(t0,df_history=df_history,threshold=threshold,lam=lam,with_centroid=True,constant_radius=0.3)
+    print("Evaluating...")
+    m_c = measurement(centroids,df_impression=df_impression)
+    m_m = measurement(medoids,df_impression=df_impression)
+    #print(m_m)
+    res.append(threshold)
+    res.append(lam)
+    res.append(m_m.recall.mean()) 
+    res.append(m_m.percent_empty.mean())
+    res.append(medoids.radius.mean())
+    res.append(medoids.groupby("UID").size().mean())
+    res.append(m_c.recall.mean()) 
+    res.append(m_c.percent_empty.mean())
+    res.append(centroids.radius.mean())
+    res.append(centroids.groupby("UID").size().mean())
+    return res
+
+def tuningParameters(subsetNr, lam, threshold,size=-1):
+    history = 'generate/user_history_'+subsetNr+'.csv'
+    impression = 'generate/user_impressions_'+subsetNr+'.csv'
+    
+    
+    df_impression = initialUserImpression(impression)
+    df_history = initialUserHistory(history)
+        
+    if size != -1:
+        df_impression = df_impression.loc[0:size]
+        
+    t0 = 1575586800+1000
+    result = []
+    for t in threshold:
+        for l in lam:
+            print("Running with threshold", t, "and lambda", l)
+            r = tuning(df_history, df_impression, t0, t, l)
+            #print(r)
+            result.append(r)
+    return pd.DataFrame(result, columns=['Threshold','Lambda','Medoid Recall','Empty medoids','Medoid radius','Medoids per user','Centroid Recall','Empty centroids','Centroid radius','Centroids per user'])
+   
