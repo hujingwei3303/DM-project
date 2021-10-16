@@ -4,6 +4,36 @@ import numpy as np
 from analysis.common import getVectorColumns,initialUserImpression,initialUserHistory
 from analysis.clustering import clusteringBatch
 
+def baselineTestAvg(history,default_radius=0.3):
+    df_news_embedding = pd.read_csv('generate/news_embedding.csv')
+    df_news_meta = pd.read_csv('generate/news_cleaned.csv')
+
+    df_history = pd.read_csv(history)
+    df_history = df_history.merge(df_news_embedding,on='NID')
+    df_history = df_history.merge(df_news_meta,on='NID')
+    
+    #Sort by publishDate ascendingly
+    df_history.sort_values('publishDate',inplace=True)
+
+    vector_columns = getVectorColumns(df_history)
+
+    records_avg = []
+   
+    for UID,g in df_history.groupby('UID'):
+        if len(g)<2:
+            continue
+
+        avgVector = g[vector_columns].values.mean(axis=0)
+        
+        record = []
+        record.append(UID)
+        record += avgVector.tolist()
+        records_avg.append(record)
+
+    df_avg = pd.DataFrame.from_records(records_avg,columns=['UID']+vector_columns)
+    df_avg['radius'] = default_radius
+    
+    return df_avg
 def baselineTest(history,default_radius=0.3):
     df_news_embedding = pd.read_csv('generate/news_embedding.csv')
     df_news_meta = pd.read_csv('generate/news_cleaned.csv')
