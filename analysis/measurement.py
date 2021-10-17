@@ -105,17 +105,18 @@ def measurement(df_user_representation,similarity_threshold=0.4,metric='cosine',
         
     return pd.DataFrame.from_records(measure,columns=['UID','recall','percent_empty'])
 
-def tuning(df_history,df_impression,t0,threshold,lam):
+def tuning(df_history,df_impression,t0,threshold,lam,similarity_threshold):
     res = []
     print("Clustering...")
     medoids,centroids = clusteringBatch(t0,df_history=df_history,threshold=threshold,lam=lam,with_centroid=True)
     print("Evaluating...")
-    m_c = measurement(centroids,df_impression=df_impression,similarity_threshold=0.3)
-    m_m = measurement(medoids,df_impression=df_impression,similarity_threshold=0.3)
-    print(m_c.recall_mean())
+    m_c = measurement(centroids,df_impression=df_impression,similarity_threshold=similarity_threshold)
+    m_m = measurement(medoids,df_impression=df_impression,similarity_threshold=similarity_threshold)
+    #print(m_c.recall.mean())
     #print(m_m)
     res.append(threshold)
     res.append(lam)
+    res.append(similarity_threshold)
     res.append(m_m.recall.mean()) 
     res.append(m_m.percent_empty.mean())
     res.append(medoids.groupby("UID").size().mean())
@@ -124,7 +125,7 @@ def tuning(df_history,df_impression,t0,threshold,lam):
     res.append(centroids.groupby("UID").size().mean())
     return res
 
-def tuningParameters(subsetNr, lam, threshold,size=-1):
+def tuningParameters(subsetNr, lam, threshold,similarity_threshold):
     history = 'generate/user_history_'+subsetNr+'.csv'
     impression = 'generate/user_impressions_'+subsetNr+'.csv'
     
@@ -132,16 +133,14 @@ def tuningParameters(subsetNr, lam, threshold,size=-1):
     df_impression = initialUserImpression(impression)
     df_history = initialUserHistory(history)
         
-    if size != -1:
-        df_impression = df_impression.loc[0:size]
-        
     t0 = 1575586800+1000
     result = []
     for t in threshold:
         for l in lam:
-            print("Running with threshold", t, "and lambda", l)
-            r = tuning(df_history, df_impression, t0, t, l)
-            #print(r)
-            result.append(r)
-    return pd.DataFrame(result, columns=['Threshold','Lambda','Medoid Recall','Empty medoids','Medoids per user','Centroid Recall','Empty centroids','Centroids per user'])
+            for s in similarity_threshold:
+                print("Running with clustering threshold", t, "similarity", s, "and lambda", l)
+                r = tuning(df_history, df_impression, t0, t, l, similarity_threshold=s)
+                #print(r)
+                result.append(r)
+    return pd.DataFrame(result, columns=['Threshold','Lambda','Similarity','Medoid Recall','Empty medoids','Medoids per user','Centroid Recall','Empty centroids','Centroids per user'])
    
