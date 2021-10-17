@@ -4,23 +4,16 @@ import numpy as np
 from analysis.common import getVectorColumns,initialUserImpression,initialUserHistory
 from analysis.clustering import clusteringBatch
 
-def baselineTestAvg(history,default_radius=0.3):
-    df_news_embedding = pd.read_csv('generate/news_embedding.csv')
-    df_news_meta = pd.read_csv('generate/news_cleaned.csv')
-
-    df_history = pd.read_csv(history)
-    df_history = df_history.merge(df_news_embedding,on='NID')
-    df_history = df_history.merge(df_news_meta,on='NID')
-    
-    #Sort by publishDate ascendingly
-    df_history.sort_values('publishDate',inplace=True)
+def baselineTestAvg(history='',df_history=None):
+    if df_history is None:
+        df_history = initialUserHistory(history)
 
     vector_columns = getVectorColumns(df_history)
 
     records_avg = []
    
     for UID,g in df_history.groupby('UID'):
-        if len(g)<2:
+        if len(g)<100:
             continue
 
         avgVector = g[vector_columns].values.mean(axis=0)
@@ -31,16 +24,13 @@ def baselineTestAvg(history,default_radius=0.3):
         records_avg.append(record)
 
     df_avg = pd.DataFrame.from_records(records_avg,columns=['UID']+vector_columns)
-    df_avg['radius'] = default_radius
     
     return df_avg
-def baselineTest(history,default_radius=0.3):
-    df_news_embedding = pd.read_csv('generate/news_embedding.csv')
-    df_news_meta = pd.read_csv('generate/news_cleaned.csv')
 
-    df_history = pd.read_csv(history)
-    df_history = df_history.merge(df_news_embedding,on='NID')
-    df_history = df_history.merge(df_news_meta,on='NID')
+def baselineTest(history='',df_history=None,k=3):
+    
+    if df_history is None:
+        df_history = initialUserHistory(history)
     
     #Sort by publishDate ascendingly
     df_history.sort_values('publishDate',inplace=True)
@@ -51,11 +41,11 @@ def baselineTest(history,default_radius=0.3):
     records_latest = []
    
     for UID,g in df_history.groupby('UID'):
-        if len(g)<4:
+        if len(g)<100:
             continue
             
         #randomly draw 3 samples from group
-        randomMedoid = g.sample(n=3)[vector_columns].values
+        randomMedoid = g.sample(n=min(len(g),k))[vector_columns].values
         
         for m in randomMedoid:
             record = []
@@ -64,8 +54,7 @@ def baselineTest(history,default_radius=0.3):
             records_random.append(record)
 
         #draw the latest sample from group
-        #print(g.index[-3:])
-        latestMedoid = g.loc[g.index[-3:]][vector_columns].values
+        latestMedoid = g.loc[g.index[max(-k,-len(g)):]][vector_columns].values
         
         for m in latestMedoid:
             record = []
@@ -74,15 +63,13 @@ def baselineTest(history,default_radius=0.3):
             records_latest.append(record)
 
     df_random = pd.DataFrame.from_records(records_random,columns=['UID']+vector_columns)
-    df_random['radius'] = default_radius
     
     df_latest = pd.DataFrame.from_records(records_latest,columns=['UID']+vector_columns)
-    df_latest['radius'] = default_radius
     
     return df_random,df_latest
 
 
-def measurement(df_user_representation,impression='',df_impression=None):
+def measurement(df_user_representation,similarity_threshold=0.4,metric='cosine',impression='',df_impression=None):
     if df_impression is None:
         df_impression = initialUserImpression(impression)
     
@@ -96,20 +83,22 @@ def measurement(df_user_representation,impression='',df_impression=None):
         if len(user)==0:
             continue
         
-        user_radius = user.radius.values
         user = user[vector_columns].values
         
         positive = g[vector_columns]
         
-        d = cdist(positive,user, metric='cosine')
+        d = cdist(positive,user, metric=metric)
        
-        #at least one distance in radius
-        hits = (d<user_radius).sum(axis=1)>0
+        #at least one distance consider similar
+        #print(d.shape,len(user))
+        hits = (d<similarity_threshold).sum(axis=1)>0
+        #print((d<similarity_threshold).sum(axis=1))
         recall = hits.mean()
         
         hits_d = d[hits]
+        #print(hits_d.shape)
         where_clusters = hits_d.argmin(axis=1)
-        
+        #print(where_clusters)
         hit = 1 - len(np.unique(where_clusters))/len(user)
        
         measure.append((UID,recall,hit))
@@ -119,20 +108,19 @@ def measurement(df_user_representation,impression='',df_impression=None):
 def tuning(df_history,df_impression,t0,threshold,lam):
     res = []
     print("Clustering...")
-    medoids,centroids = clusteringBatch(t0,df_history=df_history,threshold=threshold,lam=lam,with_centroid=True,constant_radius=0.3)
+    medoids,centroids = clusteringBatch(t0,df_history=df_history,threshold=threshold,lam=lam,with_centroid=True)
     print("Evaluating...")
-    m_c = measurement(centroids,df_impression=df_impression)
-    m_m = measurement(medoids,df_impression=df_impression)
+    m_c = measurement(centroids,df_impression=df_impression,similarity_threshold=0.3)
+    m_m = measurement(medoids,df_impression=df_impression,similarity_threshold=0.3)
+    print(m_c.recall_mean())
     #print(m_m)
     res.append(threshold)
     res.append(lam)
     res.append(m_m.recall.mean()) 
     res.append(m_m.percent_empty.mean())
-    res.append(medoids.radius.mean())
     res.append(medoids.groupby("UID").size().mean())
     res.append(m_c.recall.mean()) 
     res.append(m_c.percent_empty.mean())
-    res.append(centroids.radius.mean())
     res.append(centroids.groupby("UID").size().mean())
     return res
 
@@ -155,5 +143,5 @@ def tuningParameters(subsetNr, lam, threshold,size=-1):
             r = tuning(df_history, df_impression, t0, t, l)
             #print(r)
             result.append(r)
-    return pd.DataFrame(result, columns=['Threshold','Lambda','Medoid Recall','Empty medoids','Medoid radius','Medoids per user','Centroid Recall','Empty centroids','Centroid radius','Centroids per user'])
+    return pd.DataFrame(result, columns=['Threshold','Lambda','Medoid Recall','Empty medoids','Medoids per user','Centroid Recall','Empty centroids','Centroids per user'])
    
