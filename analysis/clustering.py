@@ -5,15 +5,22 @@ import pandas as pd
 import numpy as np
 from analysis.common import getVectorColumns,initialUserHistory
 
-def clustering(X,vector_columns,threshold,lam,radius_scale=1,default_radius=0.3,constant_radius=0.0,with_centroid=False):
+def clustering(X,vector_columns,threshold,k=3,radius_scale=1,default_radius=0.3,constant_radius=0.0,with_centroid=False):
     ''' X 
             [dataframe] group of user history
         vector_columns 
-            [array like] embedding columns V1,V2....V300
+            [array like] embedding columns V1,V2....V100
         threshold
             [number] threshold for ward clustering
-        lam 
-            [number] paramter for importance sampling
+        k 
+            [integer] choose k clusters
+        radius_scale
+            [float] mean+radius_scale*std
+        default_radius
+            [float] default value for radius
+        constant_radius
+            [float] if larger than zero, then radius use a constant
+            
        '''
     m,n = X.shape
     
@@ -35,11 +42,11 @@ def clustering(X,vector_columns,threshold,lam,radius_scale=1,default_radius=0.3,
             importance_score = X.loc[labels==c].importance.sum()
             scores[c] = importance_score
         
-        if num_clusters>3:
+        if num_clusters>k:
             p = np.array(list(scores.values()))
             sum_score = p.sum()
             p /= sum_score
-            chosed = np.random.choice(list(scores.keys()),p=p,size=3,replace=False)
+            chosed = np.random.choice(list(scores.keys()),p=p,size=k,replace=False)
         else:
             chosed = np.array(list(scores.keys()))
             
@@ -80,7 +87,7 @@ def clustering(X,vector_columns,threshold,lam,radius_scale=1,default_radius=0.3,
             
             distances_i = masked_pairwise.compressed().reshape((len_idx,len_idx))[0]
             
-            distances_i = distances_i[~(distances_i==0)]
+            distances_i = distances_i[1:]
             
            
             #68%-95%-99.8% for 1,2,3 std
@@ -88,7 +95,7 @@ def clustering(X,vector_columns,threshold,lam,radius_scale=1,default_radius=0.3,
             #according to the result, larger cluster has lower std.
             
             if constant_radius==0.0:
-                if len(distances_i)==0:#all point in cluster have same entity embeddings
+                if len(distances_i)==0 or distances_i.sum()==0:#all point in cluster have same entity embeddings
                     radius = default_radius
                 else:
                     radius = distances_i.mean()+radius_scale*distances_i.std()
@@ -112,7 +119,7 @@ def clustering(X,vector_columns,threshold,lam,radius_scale=1,default_radius=0.3,
             return X[vector_columns].values,default_radius*np.ones(X.shape[0])
 
 
-def clusteringBatch(t0,history='',df_history=None,threshold=0.7,lam=0.01,radius_scale=1,default_radius=0.3,constant_radius=0.0,with_centroid=False):
+def clusteringBatch(t0,history='',lam=0.01,df_history=None,with_centroid=False,**kwargs):
     if df_history is None:
         df_history = initialUserHistory(history)
         
@@ -126,8 +133,7 @@ def clusteringBatch(t0,history='',df_history=None,threshold=0.7,lam=0.01,radius_
         
         for UID,g in df_history.groupby('UID'):
             
-            medoid,centroid,radius = clustering(g,vector_columns,\
-                                                threshold,lam,radius_scale,default_radius,constant_radius,with_centroid)
+            medoid,centroid,radius = clustering(X=g,vector_columns=vector_columns,with_centroid=with_centroid,**kwargs)
         
             len_centroid = len(centroid)
         
@@ -148,7 +154,7 @@ def clusteringBatch(t0,history='',df_history=None,threshold=0.7,lam=0.01,radius_
         df_medoid = pd.DataFrame.from_records(records_medoid,columns=['UID']+vector_columns+['radius'])
         return df_medoid,df_centroid
     else:
-        medoid,radius = clustering(g,vector_columns,threshold,lam,radius_scale,default_radius,constant_radius,with_centroid)
+        medoid,radius = clustering(X=g,vector_columns=vector_columns,with_centroid=with_centroid,**kwargs)
         
         len_medoid = len(medoid)
         

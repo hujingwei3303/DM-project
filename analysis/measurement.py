@@ -4,16 +4,9 @@ import numpy as np
 from analysis.common import getVectorColumns,initialUserImpression,initialUserHistory
 from analysis.clustering import clusteringBatch
 
-def baselineTestAvg(history,default_radius=0.3):
-    df_news_embedding = pd.read_csv('generate/news_embedding.csv')
-    df_news_meta = pd.read_csv('generate/news_cleaned.csv')
-
-    df_history = pd.read_csv(history)
-    df_history = df_history.merge(df_news_embedding,on='NID')
-    df_history = df_history.merge(df_news_meta,on='NID')
-    
-    #Sort by publishDate ascendingly
-    df_history.sort_values('publishDate',inplace=True)
+def baselineTestAvg(history='',df_history=None,default_radius=0.3):
+    if df_history is None:
+        df_history = initialUserHistory(history)
 
     vector_columns = getVectorColumns(df_history)
 
@@ -34,13 +27,11 @@ def baselineTestAvg(history,default_radius=0.3):
     df_avg['radius'] = default_radius
     
     return df_avg
-def baselineTest(history,default_radius=0.3):
-    df_news_embedding = pd.read_csv('generate/news_embedding.csv')
-    df_news_meta = pd.read_csv('generate/news_cleaned.csv')
 
-    df_history = pd.read_csv(history)
-    df_history = df_history.merge(df_news_embedding,on='NID')
-    df_history = df_history.merge(df_news_meta,on='NID')
+def baselineTest(history='',df_history=None,k=3,default_radius=0.3):
+    
+    if df_history is None:
+        df_history = initialUserHistory(history)
     
     #Sort by publishDate ascendingly
     df_history.sort_values('publishDate',inplace=True)
@@ -51,11 +42,11 @@ def baselineTest(history,default_radius=0.3):
     records_latest = []
    
     for UID,g in df_history.groupby('UID'):
-        if len(g)<4:
+        if len(g)<2:
             continue
             
         #randomly draw 3 samples from group
-        randomMedoid = g.sample(n=3)[vector_columns].values
+        randomMedoid = g.sample(n=min(len(g),k))[vector_columns].values
         
         for m in randomMedoid:
             record = []
@@ -65,7 +56,7 @@ def baselineTest(history,default_radius=0.3):
 
         #draw the latest sample from group
         #print(g.index[-3:])
-        latestMedoid = g.loc[g.index[-3:]][vector_columns].values
+        latestMedoid = g.loc[g.index[max(-k,-len(g)):]][vector_columns].values
         
         for m in latestMedoid:
             record = []
