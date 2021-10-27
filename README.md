@@ -1,3 +1,5 @@
 # DM-project
-This is repo for Data Mining Courses
+
 DM.ipynb is the demo.
+
+Other notebooks are for plotting and measurement.
